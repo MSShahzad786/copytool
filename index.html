@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Extractor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+        #fileInput {
+            margin: 5px 0;
+            font-size: 0.8em;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            margin: 5px 0;
+        }
+        .flag-button-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin: 5px 0;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        button {
+            flex: 1; /* Equal width for Extract/Copy */
+            padding: 8px;
+            font-size: 0.8em;
+            cursor: pointer;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        #extractBtn {
+            background-color: #007bff; /* Blue for Extract */
+        }
+        #extractBtn:hover {
+            background-color: #0056b3;
+        }
+        #copyBtn {
+            background-color: #28a745; /* Green for Copy */
+        }
+        #copyBtn:hover {
+            background-color: #218838;
+        }
+        .flag-btn {
+            flex: none; /* Fixed size for flag buttons */
+            padding: 5px 10px;
+            background-color: #6c757d; /* Gray for flag buttons */
+            font-size: 0.7em;
+        }
+        .flag-btn:hover {
+            background-color: #5a6268;
+        }
+        #fileContent {
+            width: 100%;
+            height: calc(100% - 130px); /* Adjust for input, buttons, and flag buttons */
+            font-size: 0.7em; /* Small font */
+            resize: none;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            white-space: pre-wrap;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <textarea id="fileContent"></textarea>
+        <div class="button-container">
+            <button id="extractBtn" onclick="extractText()">Extract</button>
+            <button id="copyBtn" onclick="copyToClipboard()">Copy</button>
+        </div>
+        <div id="flagButtonContainer" class="flag-button-container"></div>
+        <input type="file" id="fileInput" accept=".txt">
+    </div>
+
+    <script>
+        let fullText = '';
+        let lastStartIndex = 0;
+        let lastFlag = '';
+        let lastExtractedText = '';
+        const flagTexts = {}; // Store extracted text for each flag
+
+        // Handle file upload
+        const fileInput = document.getElementById('fileInput');
+        fileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    fullText = e.target.result;
+                    lastStartIndex = 0;
+                    lastFlag = '';
+                    lastExtractedText = '';
+                    Object.keys(flagTexts).forEach(key => delete flagTexts[key]); // Clear flag texts
+                    document.getElementById('flagButtonContainer').innerHTML = ''; // Clear flag buttons
+                    document.getElementById('fileContent').value = fullText; // Display text
+                };
+                reader.onerror = function(e) {
+                    alert('Error reading file. Please try again.');
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Extract text to flag
+        function extractText() {
+            fullText = document.getElementById('fileContent').value; // Update fullText from textarea
+            const flag = prompt('Enter the flag word (end point):', lastFlag || '');
+            if (!flag) return;
+
+            if (!fullText) {
+                alert('Please upload a file or enter text.');
+                return;
+            }
+
+            const endIndex = fullText.indexOf(flag, lastStartIndex);
+            if (endIndex === -1) {
+                alert('Flag word not found.');
+                return;
+            }
+
+            // Extract from lastStartIndex to endIndex
+            lastExtractedText = fullText.slice(lastStartIndex, endIndex).trim();
+            flagTexts[flag] = lastExtractedText; // Store text for this flag
+            lastFlag = flag;
+            lastStartIndex = endIndex + flag.length; // Start after the flag for next extraction
+
+            // Add flag button
+            const flagButton = document.createElement('button');
+            flagButton.className = 'flag-btn';
+            flagButton.textContent = flag;
+            flagButton.onclick = () => copyFlagText(flag);
+            document.getElementById('flagButtonContainer').appendChild(flagButton);
+        }
+
+        // Copy extracted text for a specific flag
+        async function copyFlagText(flag) {
+            const textToCopy = flagTexts[flag];
+            if (!textToCopy) {
+                alert('No text available for this flag.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+            } catch (err) {
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = textToCopy;
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                try {
+                    document.execCommand('copy');
+                } catch (fallbackErr) {
+                    alert('Failed to copy text. Please copy manually.');
+                }
+                document.body.removeChild(tempTextarea);
+            }
+        }
+
+        // Copy last extracted text to clipboard
+        async function copyToClipboard() {
+            if (!lastExtractedText) {
+                alert('No text extracted yet. Click "Extract" first.');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(lastExtractedText);
+            } catch (err) {
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = lastExtractedText;
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                try {
+                    document.execCommand('copy');
+                } catch (fallbackErr) {
+                    alert('Failed to copy text. Please copy manually.');
+                }
+                document.body.removeChild(tempTextarea);
+            }
+        }
+    </script>
+</body>
+</html>
