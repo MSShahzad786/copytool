@@ -12,10 +12,31 @@
             flex-direction: column;
             height: 100vh;
             box-sizing: border-box;
+            overflow: hidden;
         }
         #fileInput {
             margin: 5px 0;
             font-size: 0.8em;
+            width: calc(100% - 30px);
+            display: inline-block;
+        }
+        .file-input-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .clear-file-icon {
+            font-size: 1.1em;
+            cursor: pointer;
+            color: #dc3545;
+            background: none;
+            border: none;
+            padding: 0;
+            line-height: 1;
+            display: none;
+        }
+        .clear-file-icon:hover {
+            color: #c82333;
         }
         .button-container {
             display: flex;
@@ -31,7 +52,7 @@
             overflow-y: auto;
         }
         button {
-            flex: 1; /* Equal width for Extract/Copy */
+            flex: 1;
             padding: 8px;
             font-size: 0.8em;
             cursor: pointer;
@@ -41,51 +62,92 @@
             transition: background-color 0.2s;
         }
         #extractBtn {
-            background-color: #007bff; /* Blue for Extract */
+            background-color: #007bff;
         }
         #extractBtn:hover {
             background-color: #0056b3;
         }
         #copyBtn {
-            background-color: #28a745; /* Green for Copy */
+            background-color: #28a745;
         }
         #copyBtn:hover {
             background-color: #218838;
         }
+        #clearBtn {
+            background-color: #dc3545;
+        }
+        #clearBtn:hover {
+            background-color: #c82333;
+        }
         .flag-btn {
-            flex: none; /* Fixed size for flag buttons */
-            padding: 5px 10px;
-            background-color: #6c757d; /* Gray for flag buttons */
-            font-size: 0.7em;
+            flex: none;
+            padding: 8px 12px;
+            font-size: 0.9em;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .flag-btn:hover {
-            background-color: #5a6268;
+            filter: brightness(85%);
+        }
+        .flag-btn .remove-flag {
+            font-size: 1.1em;
+            cursor: pointer;
+            color: white;
+            background: none;
+            border: none;
+            padding: 0;
+            line-height: 1;
+        }
+        .flag-btn .remove-flag:hover {
+            color: #ffcccc;
         }
         #fileContent {
             width: 100%;
-            height: calc(100% - 130px); /* Adjust for input, buttons, and flag buttons */
-            font-size: 0.7em; /* Small font */
-            resize: none;
+            flex: 1;
+            font-size: 0.7em;
             margin: 5px 0;
             border: 1px solid #ccc;
             white-space: pre-wrap;
+            overflow-y: auto;
+            padding: 5px;
+            outline: none;
+            background-color: white;
+            box-sizing: border-box;
+        }
+        .flag-word {
+            display: inline;
+            padding: 2px;
+            border-radius: 3px;
         }
         .container {
             flex: 1;
             display: flex;
             flex-direction: column;
+            height: 100%;
+            overflow: hidden;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <textarea id="fileContent"></textarea>
+        <div id="fileContent" contenteditable="true"></div>
         <div class="button-container">
             <button id="extractBtn" onclick="extractText()">Extract</button>
             <button id="copyBtn" onclick="copyToClipboard()">Copy</button>
         </div>
         <div id="flagButtonContainer" class="flag-button-container"></div>
-        <input type="file" id="fileInput" accept=".txt">
+        <div class="file-input-container">
+            <input type="file" id="fileInput" accept=".txt">
+            <button id="clearFileIcon" class="clear-file-icon" onclick="clearFileAndStorage()">×</button>
+        </div>
+        <div class="button-container">
+            <button id="clearBtn" onclick="clearFileAndStorage()">Clear File</button>
+        </div>
     </div>
 
     <script>
@@ -93,9 +155,141 @@
         let lastStartIndex = 0;
         let lastFlag = '';
         let lastExtractedText = '';
-        const flagTexts = {}; // Store extracted text for each flag
+        const flagTexts = {};
+        const flagColors = [
+            '#6c757d', '#dc3545', '#ffc107', '#17a2b8',
+            '#6610f2', '#e83e8c', '#fd7e14', '#20c997'
+        ];
+        const flagStyles = {};
 
-        // Handle file upload
+        function loadState() {
+            const savedText = localStorage.getItem('fullText');
+            const savedFlagTexts = localStorage.getItem('flagTexts');
+            const savedLastStartIndex = localStorage.getItem('lastStartIndex');
+            const savedLastFlag = localStorage.getItem('lastFlag');
+            const savedLastExtractedText = localStorage.getItem('lastExtractedText');
+            const savedFlagStyles = localStorage.getItem('flagStyles');
+
+            if (savedText) {
+                fullText = savedText;
+                updateContent(fullText);
+                document.getElementById('clearFileIcon').style.display = 'inline';
+            }
+            if (savedFlagTexts) {
+                Object.assign(flagTexts, JSON.parse(savedFlagTexts));
+                Object.keys(flagTexts).forEach((flag, index) => {
+                    createFlagButton(flag, index);
+                });
+            }
+            if (savedLastStartIndex) {
+                lastStartIndex = parseInt(savedLastStartIndex, 10);
+            }
+            if (savedLastFlag) {
+                lastFlag = savedLastFlag;
+            }
+            if (savedLastExtractedText) {
+                lastExtractedText = savedLastExtractedText;
+            }
+            if (savedFlagStyles) {
+                Object.assign(flagStyles, JSON.parse(savedFlagStyles));
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('fullText', fullText);
+            localStorage.setItem('flagTexts', JSON.stringify(flagTexts));
+            localStorage.setItem('lastStartIndex', lastStartIndex);
+            localStorage.setItem('lastFlag', lastFlag);
+            localStorage.setItem('lastExtractedText', lastExtractedText);
+            localStorage.setItem('flagStyles', JSON.stringify(flagStyles));
+        }
+
+        function clearState() {
+            localStorage.removeItem('fullText');
+            localStorage.removeItem('flagTexts');
+            localStorage.removeItem('lastStartIndex');
+            localStorage.removeItem('lastFlag');
+            localStorage.removeItem('lastExtractedText');
+            localStorage.removeItem('flagStyles');
+        }
+
+        function updateContent(text) {
+            let content = text.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+            Object.keys(flagStyles).forEach(flag => {
+                const escapedFlag = flag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const regex = new RegExp(`\\b${escapedFlag}\\b`, 'g');
+                content = content.replace(regex, `<span style="background-color: ${flagStyles[flag]}" class="flag-word" data-flag="${flag}">${flag}</span>`);
+            });
+            document.getElementById('fileContent').innerHTML = content;
+            fullText = text;
+        }
+
+        function createFlagButton(flag, index) {
+            const flagButton = document.createElement('button');
+            flagButton.className = 'flag-btn';
+            flagButton.style.backgroundColor = flagColors[index % flagColors.length];
+            const flagLabel = document.createElement('span');
+            flagLabel.textContent = flag;
+            const removeButton = document.createElement('button');
+            removeButton.className = 'remove-flag';
+            removeButton.textContent = '×';
+            removeButton.onclick = (e) => {
+                e.stopPropagation();
+                removeFlag(flag);
+            };
+            flagButton.appendChild(flagLabel);
+            flagButton.appendChild(removeButton);
+            flagButton.onclick = () => copyAndScrollToFlag(flag);
+            document.getElementById('flagButtonContainer').appendChild(flagButton);
+        }
+
+        function removeFlag(flag) {
+            delete flagTexts[flag];
+            delete flagStyles[flag];
+            document.getElementById('flagButtonContainer').innerHTML = '';
+            Object.keys(flagTexts).forEach((f, i) => createFlagButton(f, i));
+            updateContent(fullText);
+            if (lastFlag === flag) {
+                lastExtractedText = '';
+                lastFlag = '';
+                lastStartIndex = Object.keys(flagTexts).reduce((maxIndex, f) => {
+                    const index = fullText.indexOf(f);
+                    return index !== -1 ? Math.max(maxIndex, index + f.length) : maxIndex;
+                }, 0);
+            }
+            saveState();
+        }
+
+        function copyAndScrollToFlag(flag) {
+            copyFlagText(flag);
+            const flagElements = document.querySelectorAll(`.flag-word[data-flag="${flag}"]`);
+            if (flagElements.length > 0) {
+                const flagElement = flagElements[0];
+                const textarea = document.getElementById('fileContent');
+                const scrollTop = flagElement.offsetTop - textarea.offsetTop;
+                textarea.scrollTo({
+                    top: scrollTop - (textarea.clientHeight / 2 - flagElement.offsetHeight / 2),
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        function clearFileAndStorage() {
+            fullText = '';
+            lastStartIndex = 0;
+            lastFlag = '';
+            lastExtractedText = '';
+            Object.keys(flagTexts).forEach(key => delete flagTexts[key]);
+            Object.keys(flagStyles).forEach(key => delete flagStyles[key]);
+            document.getElementById('flagButtonContainer').innerHTML = '';
+            document.getElementById('fileContent').innerHTML = '';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('clearFileIcon').style.display = 'none';
+            clearState();
+        }
+
+        loadState();
+
         const fileInput = document.getElementById('fileInput');
         fileInput.addEventListener('change', function(event) {
             const file = event.target.files[0];
@@ -106,9 +300,13 @@
                     lastStartIndex = 0;
                     lastFlag = '';
                     lastExtractedText = '';
-                    Object.keys(flagTexts).forEach(key => delete flagTexts[key]); // Clear flag texts
-                    document.getElementById('flagButtonContainer').innerHTML = ''; // Clear flag buttons
-                    document.getElementById('fileContent').value = fullText; // Display text
+                    Object.keys(flagTexts).forEach(key => delete flagTexts[key]);
+                    Object.keys(flagStyles).forEach(key => delete flagStyles[key]);
+                    document.getElementById('flagButtonContainer').innerHTML = '';
+                    updateContent(fullText);
+                    document.getElementById('clearFileIcon').style.display = 'inline';
+                    clearState();
+                    saveState();
                 };
                 reader.onerror = function(e) {
                     alert('Error reading file. Please try again.');
@@ -117,9 +315,14 @@
             }
         });
 
-        // Extract text to flag
+        document.getElementById('fileContent').addEventListener('input', function() {
+            fullText = this.innerText;
+            updateContent(fullText);
+            saveState();
+        });
+
         function extractText() {
-            fullText = document.getElementById('fileContent').value; // Update fullText from textarea
+            fullText = document.getElementById('fileContent').innerText;
             const flag = prompt('Enter the flag word (end point):', lastFlag || '');
             if (!flag) return;
 
@@ -134,21 +337,22 @@
                 return;
             }
 
-            // Extract from lastStartIndex to endIndex
             lastExtractedText = fullText.slice(lastStartIndex, endIndex).trim();
-            flagTexts[flag] = lastExtractedText; // Store text for this flag
+            flagTexts[flag] = lastExtractedText;
             lastFlag = flag;
-            lastStartIndex = endIndex + flag.length; // Start after the flag for next extraction
+            lastStartIndex = endIndex + flag.length;
 
-            // Add flag button
-            const flagButton = document.createElement('button');
-            flagButton.className = 'flag-btn';
-            flagButton.textContent = flag;
-            flagButton.onclick = () => copyFlagText(flag);
-            document.getElementById('flagButtonContainer').appendChild(flagButton);
+            const colorIndex = Object.keys(flagTexts).length - 1;
+            const flagColor = flagColors[colorIndex % flagColors.length];
+            flagStyles[flag] = flagColor;
+
+            document.getElementById('flagButtonContainer').innerHTML = '';
+            Object.keys(flagTexts).forEach((f, i) => createFlagButton(f, i));
+
+            updateContent(fullText);
+            saveState();
         }
 
-        // Copy extracted text for a specific flag
         async function copyFlagText(flag) {
             const textToCopy = flagTexts[flag];
             if (!textToCopy) {
@@ -172,7 +376,6 @@
             }
         }
 
-        // Copy last extracted text to clipboard
         async function copyToClipboard() {
             if (!lastExtractedText) {
                 alert('No text extracted yet. Click "Extract" first.');
@@ -196,4 +399,4 @@
         }
     </script>
 </body>
-</html>
+                </html>
