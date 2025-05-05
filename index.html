@@ -3,16 +3,37 @@
 <head>
     <title>Simple Text Viewer</title>
     <style>
-        .container { 
-        bg-color:grey;
-            max-width: 800px; 
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #e9ecef;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
             margin: 20px auto;
-            padding: 0 10px;
+            padding: 20px;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .text-container {
+            background: #f8f9fa;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            margin-bottom: 15px;
+            max-height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            box-sizing: border-box;
+            width: 100%;
         }
         .line-number {
             display: inline-block;
             width: 40px;
-            color: #666;
+            color: #6c757d;
             text-align: right;
             padding-right: 10px;
             user-select: none;
@@ -21,52 +42,80 @@
             display: inline-block;
             width: calc(100% - 60px);
         }
-        .text-container {
-            background: #f5f5f5;
-            padding: 10px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            margin-bottom: 10px;
-            max-height: 60vh;
-            overflow-y: auto;
-            box-sizing: border-box;
-            width: 100%;
-        }
         .controls {
-            margin-top: 10px;
             display: flex;
-            align-items: center;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 10px;
         }
-        .line-input {
-           display: block;
-            margin: 0;
+        .search-group, .line-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
-        #fileInput {
-        display: block;
-            padding: 5px;
+        input[type="text"], input[type="file"] {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        input[type="file"] {
+            display: block;
+            width: 100%;
+            background: #f1f3f5;
         }
         #searchInput {
-            display: block;
-            padding: 5px;
+            flex: 1;
+            min-width: 200px;
+        }
+        #lineRange {
+            width: 120px;
+        }
+        button {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:hover {
+            filter: brightness(90%);
+        }
+        #searchButton {
+            background: #007bff;
+            color: white;
+        }
+        #prevButton, #nextButton {
+            background: #28a745;
+            color: white;
+        }
+        #copyButton {
+            background: #6c757d;
+            color: white;
         }
         .highlight {
-            background-color: red;
+            background-color: #ffeb3b;
+            color: #212529;
+        }
+        .current-highlight {
+            background-color: #ffc107;
+            color: #212529;
         }
         @media (max-width: 600px) {
             .container {
                 margin: 10px;
-                padding: 0 5px;
+                padding: 10px;
             }
             .text-container {
                 max-height: 50vh;
             }
-            .line-input {
-                width: 80px;
+            .search-group, .line-group {
+                flex-direction: column;
+                align-items: stretch;
             }
-            #searchInput {
-                width: 120px;
+            #searchInput, #lineRange, button {
+                width: 100%;
             }
         }
     </style>
@@ -75,27 +124,79 @@
     <div class="container">
         <div class="text-container" id="textContent"></div>
         <div class="controls">
-            <input type="file" id="fileInput" accept=".txt"> 
-            <input type="text" id="searchInput" placeholder="Search text">
-            <input type="text" id="lineRange" class="line-input" placeholder="e.g., 1-3 or 1 3">
-            <button onclick="copyLines()">Copy</button>
+            <div class="search-group">
+                <input type="text" id="searchInput" placeholder="Search text">
+                <button id="searchButton" onclick="searchText()">Search</button>
+                <button id="prevButton" onclick="navigateSearch(-1)" disabled>Previous</button>
+                <button id="nextButton" onclick="navigateSearch(1)" disabled>Next</button>
+            </div>
+            <div class="line-group">
+                <input type="text" id="lineRange" placeholder="e.g., 1-3 or 1 3">
+                <button id="copyButton" onclick="copyLines()">Copy</button>
+            </div>
+            <input type="file" id="fileInput" accept=".txt">
         </div>
     </div>
 
     <script>
         let currentText = `Line one\nLine two\nLine three\nLine four\nLine five`;
+        let matches = [];
+        let currentMatchIndex = -1;
 
         function displayText(text, searchTerm = '') {
             const lines = text.split('\n');
             const contentDiv = document.getElementById('textContent');
+            matches = [];
+            currentMatchIndex = -1;
+
             contentDiv.innerHTML = lines.map((line, index) => {
                 let highlightedLine = line;
                 if (searchTerm) {
                     const regex = new RegExp(searchTerm, 'gi');
+                    let match;
+                    while ((match = regex.exec(line)) !== null) {
+                        matches.push({ line: index, start: match.index, length: match[0].length });
+                    }
                     highlightedLine = line.replace(regex, match => `<span class="highlight">${match}</span>`);
                 }
                 return `<div><span class="line-number">${index + 1}</span><span class="text-line">${highlightedLine}</span></div>`;
             }).join('');
+
+            updateNavigationButtons();
+            if (matches.length > 0) {
+                currentMatchIndex = 0;
+                highlightCurrentMatch();
+            }
+        }
+
+        function highlightCurrentMatch() {
+            const highlights = document.querySelectorAll('.highlight');
+            highlights.forEach((el, idx) => {
+                el.className = idx === currentMatchIndex ? 'current-highlight' : 'highlight';
+            });
+            if (currentMatchIndex >= 0 && matches[currentMatchIndex]) {
+                const lineDiv = document.querySelector(`.text-container div:nth-child(${matches[currentMatchIndex].line + 1})`);
+                if (lineDiv) {
+                    lineDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+            updateNavigationButtons();
+        }
+
+        function navigateSearch(direction) {
+            if (matches.length === 0) return;
+            currentMatchIndex = (currentMatchIndex + direction + matches.length) % matches.length;
+            highlightCurrentMatch();
+        }
+
+        function updateNavigationButtons() {
+            document.getElementById('prevButton').disabled = matches.length <= 1 || currentMatchIndex <= 0;
+            document.getElementById('nextButton').disabled = matches.length <= 1 || currentMatchIndex >= matches.length - 1;
+        }
+
+        function searchText() {
+            const searchTerm = document.getElementById('searchInput').value;
+            displayText(currentText, searchTerm);
         }
 
         function cleanText(text) {
@@ -112,17 +213,12 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     currentText = cleanText(e.target.result);
-                    displayText(currentText, document.getElementById('searchInput').value);
+                    displayText(currentText);
                 };
                 reader.readAsText(file);
             } else {
                 alert('Please select a valid .txt file');
             }
-        });
-
-        document.getElementById('searchInput').addEventListener('input', () => {
-            const searchTerm = document.getElementById('searchInput').value;
-            displayText(currentText, searchTerm);
         });
 
         async function copyLines() {
@@ -149,7 +245,6 @@
             const selectedLines = lines.slice(fromLine - 1, toLine).join('\n');
             try {
                 await navigator.clipboard.writeText(selectedLines);
-           
             } catch (err) {
                 const textarea = document.createElement('textarea');
                 textarea.value = selectedLines;
