@@ -102,6 +102,24 @@
             background-color: #ffc107;
             color: #212529;
         }
+        /* NEW: Flash alert styles */
+        .flash-alert {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #dc3545;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .flash-alert.show {
+            opacity: 1;
+        }
         @media (max-width: 600px) {
             .container {
                 margin: 10px;
@@ -117,11 +135,17 @@
             #searchInput, #lineRange, button {
                 width: 100%;
             }
+            .flash-alert {
+                width: 90%;
+                text-align: center;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <!-- NEW: Flash alert container -->
+        <div id="flashAlert" class="flash-alert"></div>
         <div class="text-container" id="textContent"></div>
         <div class="controls">
             <div class="search-group">
@@ -142,6 +166,16 @@
         let currentText = `Line one\nLine two\nLine three\nLine four\nLine five`;
         let matches = [];
         let currentMatchIndex = -1;
+
+        // NEW: Function to show flash alert
+        function showFlashAlert(message, duration = 3000) {
+            const flashAlert = document.getElementById('flashAlert');
+            flashAlert.textContent = message;
+            flashAlert.classList.add('show');
+            setTimeout(() => {
+                flashAlert.classList.remove('show');
+            }, duration);
+        }
 
         function displayText(text, searchTerm = '') {
             const lines = text.split('\n');
@@ -166,6 +200,9 @@
             if (matches.length > 0) {
                 currentMatchIndex = 0;
                 highlightCurrentMatch();
+            } else if (searchTerm) {
+                // NEW: Show flash alert when no matches found
+                showFlashAlert('No matches found for "' + searchTerm + '"');
             }
         }
 
@@ -194,8 +231,13 @@
             document.getElementById('nextButton').disabled = matches.length <= 1 || currentMatchIndex >= matches.length - 1;
         }
 
+        // MODIFIED: Search function to integrate flash alert
         function searchText() {
             const searchTerm = document.getElementById('searchInput').value;
+            if (!searchTerm.trim()) {
+                showFlashAlert('Please enter a search term');
+                return;
+            }
             displayText(currentText, searchTerm);
         }
 
