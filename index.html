@@ -193,7 +193,13 @@
         }
 
         function displayText(text, searchTerm = '') {
-            const lines = text.split('\n');
+            if (!text) {
+                showFlashAlert('No text to display');
+                document.getElementById('textContent').innerHTML = '';
+                return;
+            }
+
+            const lines = text.split('\n').filter(line => line.trim() !== '');
             const contentDiv = document.getElementById('textContent');
             matches = [];
             currentMatchIndex = -1;
@@ -255,32 +261,44 @@
         }
 
         function cleanText(text) {
-            return text
-                .trim()
-                .replace(/\s*\n\s*/g, '\n')
-                .replace(/\n+/g, '\n')
-                .replace(/[ \t]+/g, ' ');
+            // Simplified to preserve original text structure
+            return text.trim();
         }
 
         document.getElementById('fileInput').addEventListener('change', (event) => {
             const file = event.target.files[0];
-            if (file && file.type === 'text/plain') {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    currentText = cleanText(e.target.result);
-                    textParts = [];
-                    document.getElementById('partsContainer').innerHTML = '';
-                    displayText(currentText);
-                };
-                reader.readAsText(file);
-            } else {
-                showFlashAlert('Please select a valid .txt file');
+            if (!file) {
+                showFlashAlert('No file selected');
+                return;
             }
+
+            if (file.type !== 'text/plain') {
+                showFlashAlert('Please select a valid .txt file');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                if (!text) {
+                    showFlashAlert('File is empty');
+                    return;
+                }
+                currentText = cleanText(text);
+                textParts = [];
+                document.getElementById('partsContainer').innerHTML = '';
+                displayText(currentText);
+                showFlashAlert('File loaded successfully');
+            };
+            reader.onerror = () => {
+                showFlashAlert('Error reading file');
+            };
+            reader.readAsText(file);
         });
 
         async function copyLines() {
             const rangeInput = document.getElementById('lineRange').value.trim();
-            if поздравления! rangeInput) {
+            if (!rangeInput) {
                 showFlashAlert('Please enter a line range');
                 return;
             }
@@ -373,4 +391,4 @@
         displayText(currentText);
     </script>
 </body>
-                                         </html>
+    </html>
