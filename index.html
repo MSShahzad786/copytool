@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Simple Text Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=0.8">
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -47,13 +48,13 @@
             flex-direction: column;
             gap: 10px;
         }
-        .search-group, .line-group {
+        .search-group, .line-group, .split-group {
             display: flex;
             align-items: center;
             gap: 10px;
             flex-wrap: wrap;
         }
-        input[type="text"], input[type="file"] {
+        input[type="text"], input[type="file"], input[type="number"] {
             padding: 8px;
             border: 1px solid #ced4da;
             border-radius: 4px;
@@ -68,7 +69,7 @@
             flex: 1;
             min-width: 200px;
         }
-        #lineRange {
+        #lineRange, #splitLine {
             width: 120px;
         }
         button {
@@ -90,8 +91,12 @@
             background: #28a745;
             color: white;
         }
-        #copyButton {
+        #copyButton, .copy-part-button {
             background: #6c757d;
+            color: white;
+        }
+        #splitButton {
+            background: #dc3545;
             color: white;
         }
         .highlight {
@@ -102,7 +107,6 @@
             background-color: #ffc107;
             color: #212529;
         }
-        /* NEW: Flash alert styles */
         .flash-alert {
             position: fixed;
             top: 20px;
@@ -120,6 +124,13 @@
         .flash-alert.show {
             opacity: 1;
         }
+        .part-section {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
         @media (max-width: 600px) {
             .container {
                 margin: 10px;
@@ -128,11 +139,11 @@
             .text-container {
                 max-height: 50vh;
             }
-            .search-group, .line-group {
+            .search-group, .line-group, .split-group {
                 flex-direction: column;
                 align-items: stretch;
             }
-            #searchInput, #lineRange, button {
+            #searchInput, #lineRange, #splitLine, button {
                 width: 100%;
             }
             .flash-alert {
@@ -144,7 +155,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- NEW: Flash alert container -->
         <div id="flashAlert" class="flash-alert"></div>
         <div class="text-container" id="textContent"></div>
         <div class="controls">
@@ -158,7 +168,12 @@
                 <input type="text" id="lineRange" placeholder="e.g., 1-3 or 1 3">
                 <button id="copyButton" onclick="copyLines()">Copy</button>
             </div>
+            <div class="split-group">
+                <input type="number" id="splitLine" min="1" placeholder="Split at line">
+                <button id="splitButton" onclick="splitText()">Split</button>
+            </div>
             <input type="file" id="fileInput" accept=".txt">
+            <div id="partsContainer"></div>
         </div>
     </div>
 
@@ -166,8 +181,8 @@
         let currentText = `Line one\nLine two\nLine three\nLine four\nLine five`;
         let matches = [];
         let currentMatchIndex = -1;
+        let textParts = [];
 
-        // NEW: Function to show flash alert
         function showFlashAlert(message, duration = 3000) {
             const flashAlert = document.getElementById('flashAlert');
             flashAlert.textContent = message;
@@ -201,7 +216,6 @@
                 currentMatchIndex = 0;
                 highlightCurrentMatch();
             } else if (searchTerm) {
-                // NEW: Show flash alert when no matches found
                 showFlashAlert('No matches found for "' + searchTerm + '"');
             }
         }
@@ -231,7 +245,6 @@
             document.getElementById('nextButton').disabled = matches.length <= 1 || currentMatchIndex >= matches.length - 1;
         }
 
-        // MODIFIED: Search function to integrate flash alert
         function searchText() {
             const searchTerm = document.getElementById('searchInput').value;
             if (!searchTerm.trim()) {
@@ -255,24 +268,26 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     currentText = cleanText(e.target.result);
+                    textParts = [];
+                    document.getElementById('partsContainer').innerHTML = '';
                     displayText(currentText);
                 };
                 reader.readAsText(file);
             } else {
-                alert('Please select a valid .txt file');
+                showFlashAlert('Please select a valid .txt file');
             }
         });
 
         async function copyLines() {
             const rangeInput = document.getElementById('lineRange').value.trim();
-            if (!rangeInput) {
-                alert('Please enter a line range');
+            if поздравления! rangeInput) {
+                showFlashAlert('Please enter a line range');
                 return;
             }
 
             const range = rangeInput.split(/[^0-9]+/).map(num => parseInt(num)).filter(num => !isNaN(num));
             if (range.length !== 2) {
-                alert('Please enter a valid range (e.g., 1-3, 1 3, 1_3)');
+                showFlashAlert('Please enter a valid range (e.g., 1-3, 1 3, 1_3)');
                 return;
             }
 
@@ -280,13 +295,14 @@
             const lines = currentText.split('\n');
             
             if (fromLine < 1 || toLine > lines.length || fromLine > toLine) {
-                alert('Invalid line range');
+                showFlashAlert('Invalid line range');
                 return;
             }
 
             const selectedLines = lines.slice(fromLine - 1, toLine).join('\n');
             try {
                 await navigator.clipboard.writeText(selectedLines);
+                showFlashAlert('Lines copied successfully');
             } catch (err) {
                 const textarea = document.createElement('textarea');
                 textarea.value = selectedLines;
@@ -294,14 +310,67 @@
                 textarea.select();
                 try {
                     document.execCommand('copy');
+                    showFlashAlert('Lines copied successfully');
                 } catch (fallbackErr) {
-                    alert('Failed to copy. Please copy manually from the text below:\n\n' + selectedLines);
+                    showFlashAlert('Failed to copy. Please copy manually:\n' + selectedLines);
                 }
                 document.body.removeChild(textarea);
             }
         }
 
+        async function copyPart(partIndex) {
+            const partText = textParts[partIndex].join('\n');
+            try {
+                await navigator.clipboard.writeText(partText);
+                showFlashAlert(`Part ${partIndex + 1} copied successfully`);
+            } catch (err) {
+                const textarea = document.createElement('textarea');
+                textarea.value = partText;
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showFlashAlert(`Part ${partIndex + 1} copied successfully`);
+                } catch (fallbackErr) {
+                    showFlashAlert('Failed to copy. Please copy manually:\n' + partText);
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+
+        function splitText() {
+            const splitLine = parseInt(document.getElementById('splitLine').value);
+            const lines = currentText.split('\n');
+
+            if (isNaN(splitLine) || splitLine < 1 || splitLine > lines.length) {
+                showFlashAlert('Please enter a valid line number');
+                return;
+            }
+
+            textParts = [
+                lines.slice(0, splitLine),
+                lines.slice(splitLine)
+            ];
+
+            const partsContainer = document.getElementById('partsContainer');
+            partsContainer.innerHTML = '';
+
+            textParts.forEach((part, index) => {
+                if (part.length > 0) {
+                    const partDiv = document.createElement('div');
+                    partDiv.className = 'part-section';
+                    partDiv.innerHTML = `
+                        <strong>Part ${index + 1} (Lines ${index === 0 ? 1 : splitLine + 1}-${index === 0 ? splitLine : lines.length})</strong>
+                        <button class="copy-part-button" onclick="copyPart(${index})">Copy Part ${index + 1}</button>
+                    `;
+                    partsContainer.appendChild(partDiv);
+                }
+            });
+
+            showFlashAlert('Text split successfully');
+        }
+
         displayText(currentText);
     </script>
 </body>
-</html>
+                                         </html>
